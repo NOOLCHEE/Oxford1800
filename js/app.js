@@ -4,8 +4,12 @@ let filteredWords = [];  // 필터 및 검색이 적용된 실시간 데이터 �
 // 퀴즈 상태 제어 변수
 let choiceQuizData = [];
 let choiceCurrentIdx = 0;
+let choiceCorrectCount = 0;
 let writeQuizData = [];
 let writeCurrentIdx = 0;
+let writeCorrectCount = 0;
+const SCORE_STORAGE_KEY = 'oxford1800-score-records';
+const COMPLETED_WORDS_STORAGE_KEY = 'oxford1800-completed-words';
 
 // 페이지가 완전히 열리면 데이터 로드 함수 가동
 document.addEventListener("DOMContentLoaded", () => {
@@ -22,8 +26,9 @@ async function loadCSVData() {
         allWords = parseCSV(csvText);
         filteredWords = [...allWords];
         
-        populateDayFilter();
+        populateDayFilter(document.getElementById('level-filter').value);
         renderWordList();
+        renderScoreRecords();
     } catch (error) {
         console.error("데이터 로드 실패:", error);
         document.getElementById('word-list-container').innerHTML = 
@@ -76,10 +81,22 @@ function parseCSV(text) {
     return result;
 }
 
-// 2. 대시보드 고유 DAY 필터 주입
-function populateDayFilter() {
+// 2. 난이도에 맞는 DAY 필터 선택지 주입
+function populateDayFilter(level = 'ALL') {
     const dayFilter = document.getElementById('day-filter');
-    const days = [...new Set(allWords.map(w => w.day))].sort();
+    const previousDay = dayFilter.value;
+    const range = level === 'Normal' ? [1, 30] : level === 'Hard' ? [31, 60] : null;
+    const days = range
+        ? Array.from({ length: range[1] - range[0] + 1 }, (_, index) => `DAY_${String(range[0] + index).padStart(2, '0')}`)
+        : [...new Set(allWords.map(w => w.day))].sort();
+
+    dayFilter.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = 'ALL';
+    allOption.textContent = range
+        ? `DAY ${String(range[0]).padStart(2, '0')}~${String(range[1]).padStart(2, '0')}`
+        : '전체 DAY 선택';
+    dayFilter.appendChild(allOption);
     
     days.forEach(day => {
         if (!day) return;
@@ -88,21 +105,30 @@ function populateDayFilter() {
         option.textContent = day.replace('_', ' '); // DAY_01 -> DAY 01 로 깔끔하게 표기
         dayFilter.appendChild(option);
     });
+
+    dayFilter.value = days.includes(previousDay) ? previousDay : 'ALL';
 }
 
 // 3. 조건부 검색 필터 핸들러
 function handleFilterChange() {
-    const dayVal = document.getElementById('day-filter').value;
     const levelVal = document.getElementById('level-filter').value;
+    populateDayFilter(levelVal);
+    const dayVal = document.getElementById('day-filter').value;
     const searchVal = document.getElementById('search-bar').value.toLowerCase().trim();
 
     filteredWords = allWords.filter(item => {
         const matchDay = (dayVal === 'ALL' || item.day === dayVal);
+        const dayNumber = Number(item.day.replace('DAY_', ''));
         const matchLevel = (levelVal === 'ALL' || item.level === levelVal);
+        const matchLevelDayRange = levelVal === 'Normal'
+            ? dayNumber >= 1 && dayNumber <= 30
+            : levelVal === 'Hard'
+                ? dayNumber >= 31 && dayNumber <= 60
+                : true;
         const matchSearch = (!searchVal || 
                              item.word.toLowerCase().includes(searchVal) || 
                              item.meaning.toLowerCase().includes(searchVal));
-        return matchDay && matchLevel && matchSearch;
+        return matchDay && matchLevel && matchLevelDayRange && matchSearch;
     });
 
     renderWordList();
@@ -118,19 +144,77 @@ function renderWordList() {
         return;
     }
 
+    const completedWords = getCompletedWords();
     filteredWords.forEach(item => {
         const card = document.createElement('div');
-        card.className = 'word-card';
+        const wordKey = getWordKey(item);
+        const isCompleted = completedWords.includes(wordKey);
+        card.className = `word-card${isCompleted ? ' completed' : ''}`;
         card.innerHTML = `
-            <div class="word-header">
-                <span class="word-title">${item.word}</span>
-                <span class="badge ${item.level.toLowerCase() === 'hard' ? 'hard' : ''}">${item.level}</span>
+            <div class="word-card-inner">
+                <div class="word-card-face front">
+                    <div class="word-header">
+                        <div class="word-title-group">
+                            <span class="word-title">${item.word}</span>
+                            ${item.audio ? `<button class="audio-icon-btn" onclick="playAudio('${item.audio}')" aria-label="${item.word} 발음 듣기" title="발음 듣기">🔊</button>` : ''}
+                        </div>
+                        <div class="word-header-actions">
+                            <button class="complete-btn" data-word-key="${escapeHTML(wordKey)}" aria-label="학습 완료" title="학습 완료">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/>
+                                </svg>
+                            </button>
+                            <span class="badge ${item.level.toLowerCase() === 'hard' ? 'hard' : ''}">${item.level}</span>
+                        </div>
+                    </div>
+                    <div class="word-meaning">${item.meaning}</div>
+                </div>
+                <div class="word-card-face back">
+                    <div class="completed-icon" data-word-key="${escapeHTML(wordKey)}" role="button" tabindex="0" aria-label="학습 완료 해제" title="학습 완료 해제">
+                        <svg viewBox="0 0 64 64" role="img" aria-hidden="true" focusable="false">
+                            <circle cx="32" cy="32" r="27" fill="none" stroke="currentColor" stroke-width="4"/>
+                            <path d="M18 33.5 27 42l19-20" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"/>
+                        </svg>
+                    </div>
+                </div>
             </div>
-            <div class="word-meaning">${item.meaning}</div>
-            ${item.audio ? `<button class="audio-btn" onclick="playAudio('${item.audio}')">🔊 발음 듣기</button>` : ''}
         `;
+        card.querySelectorAll('.complete-btn').forEach(button => {
+            button.addEventListener('click', () => toggleWordCompleted(button.dataset.wordKey));
+        });
+        const completedIcon = card.querySelector('.completed-icon');
+        completedIcon?.addEventListener('click', () => toggleWordCompleted(completedIcon.dataset.wordKey));
+        completedIcon?.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleWordCompleted(completedIcon.dataset.wordKey);
+            }
+        });
         container.appendChild(card);
     });
+}
+
+function getWordKey(item) {
+    return `${item.day}|${item.word}`;
+}
+
+function getCompletedWords() {
+    try {
+        const completedWords = JSON.parse(localStorage.getItem(COMPLETED_WORDS_STORAGE_KEY) || '[]');
+        return Array.isArray(completedWords) ? completedWords : [];
+    } catch (error) {
+        console.warn('학습 완료 상태를 불러오지 못했습니다.', error);
+        return [];
+    }
+}
+
+function toggleWordCompleted(wordKey) {
+    const completedWords = getCompletedWords();
+    const completedIndex = completedWords.indexOf(wordKey);
+    if (completedIndex >= 0) completedWords.splice(completedIndex, 1);
+    else completedWords.push(wordKey);
+    localStorage.setItem(COMPLETED_WORDS_STORAGE_KEY, JSON.stringify(completedWords));
+    renderWordList();
 }
 
 // 원본 구글 TTS 발음 연동 함수
@@ -142,25 +226,175 @@ function playAudio(url) {
 
 // 5. 상단 반응형 메뉴 전환 제어
 function switchTab(tabId) {
+    setActiveTab(tabId, event.currentTarget);
+
+    if (tabId === 'tab-choice') initChoiceQuiz();
+    if (tabId === 'tab-write') initWriteQuiz();
+    if (tabId === 'tab-scores') renderScoreRecords();
+}
+
+function setActiveTab(tabId, activeButton = null) {
     document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
 
     document.getElementById(tabId).classList.add('active');
-    event.currentTarget.classList.add('active');
+    if (activeButton) activeButton.classList.add('active');
+    else {
+        const tabButton = [...document.querySelectorAll('.tab-btn')].find(button => button.getAttribute('onclick')?.includes(tabId));
+        tabButton?.classList.add('active');
+    }
+}
 
-    if (tabId === 'tab-choice') initChoiceQuiz();
-    if (tabId === 'tab-write') initWriteQuiz();
+function getScoreRecords() {
+    try {
+        const records = JSON.parse(localStorage.getItem(SCORE_STORAGE_KEY) || '[]');
+        return Array.isArray(records) ? records : [];
+    } catch (error) {
+        console.warn('점수 기록을 불러오지 못했습니다.', error);
+        return [];
+    }
+}
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>'"]/g, character => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        "'": '&#39;',
+        '"': '&quot;'
+    }[character]));
+}
+
+function getScoreFilterLabel() {
+    const day = document.getElementById('day-filter').value;
+    const level = document.getElementById('level-filter').value;
+    const search = document.getElementById('search-bar').value.trim();
+    const dayLabel = day !== 'ALL'
+        ? day.replace('_', ' ')
+        : level === 'Normal'
+            ? 'DAY 01~30'
+            : level === 'Hard'
+                ? 'DAY 31~60'
+                : '전체 DAY';
+    return [dayLabel, level !== 'ALL' ? level : '전체 난이도', search ? `검색: ${search}` : '전체 단어'].join(' · ');
+}
+
+function saveScoreRecord(mode, correct, total) {
+    const records = getScoreRecords();
+    const key = `${mode}|${document.getElementById('day-filter').value}|${document.getElementById('level-filter').value}|${document.getElementById('search-bar').value.trim().toLowerCase()}`;
+    const existingIndex = records.findIndex(item => item.key === key);
+    const existingRecord = existingIndex >= 0 ? records[existingIndex] : null;
+    const currentScore = total > 0 ? correct / total : 0;
+    const previousScore = existingRecord && existingRecord.total > 0
+        ? existingRecord.correct / existingRecord.total
+        : -1;
+
+    if (existingRecord && currentScore <= previousScore) {
+        return;
+    }
+
+    const playerName = (prompt('최고기록을 경신했습니다! 이름을 등록해 주세요.', existingRecord?.name || '') || '').trim() || '익명';
+    const record = {
+        key,
+        mode,
+        correct,
+        total,
+        name: playerName,
+        day: document.getElementById('day-filter').value,
+        level: document.getElementById('level-filter').value,
+        filterLabel: getScoreFilterLabel(),
+        updatedAt: new Date().toISOString()
+    };
+    if (existingIndex >= 0) records[existingIndex] = record;
+    else records.push(record);
+    localStorage.setItem(SCORE_STORAGE_KEY, JSON.stringify(records));
+    renderScoreRecords();
+    setActiveTab('tab-scores');
+}
+
+function deleteScoreRecord(key) {
+    const records = getScoreRecords().filter(record => record.key !== key);
+    localStorage.setItem(SCORE_STORAGE_KEY, JSON.stringify(records));
+    renderScoreRecords();
+}
+
+function retryScoreRecord(record) {
+    const [, day, level, ...searchParts] = record.key.split('|');
+    const search = searchParts.join('|');
+    const levelFilter = document.getElementById('level-filter');
+    const dayFilter = document.getElementById('day-filter');
+    const searchBar = document.getElementById('search-bar');
+
+    levelFilter.value = level || 'ALL';
+    populateDayFilter(levelFilter.value);
+    dayFilter.value = dayFilter.querySelector(`option[value="${day}"]`) ? day : 'ALL';
+    searchBar.value = search;
+    handleFilterChange();
+
+    const tabId = record.mode === 'choice' ? 'tab-choice' : 'tab-write';
+    setActiveTab(tabId);
+    if (record.mode === 'choice') initChoiceQuiz();
+    else initWriteQuiz();
+}
+
+function renderScoreRecords() {
+    const container = document.getElementById('score-list-container');
+    if (!container) return;
+    const records = getScoreRecords().sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    if (records.length === 0) {
+        container.innerHTML = '<p class="empty-score">아직 기록된 점수가 없습니다. 퀴즈를 완료해 보세요.</p>';
+        return;
+    }
+    container.innerHTML = records.map(record => {
+        const updatedAt = new Date(record.updatedAt).toLocaleString('ko-KR', { dateStyle: 'medium', timeStyle: 'short' });
+        const modeLabel = record.mode === 'choice' ? '객관식' : '주관식';
+        const playerName = record.name || '익명';
+        const recordDay = record.day || record.key.split('|')[1] || 'ALL';
+        const recordFilterLabel = record.filterLabel || '';
+        const dayLabel = recordDay !== 'ALL'
+            ? recordDay.replace('_', ' ')
+            : record.level === 'Normal' || recordFilterLabel.includes('DAY 01~30')
+                ? 'DAY 01~30'
+                : record.level === 'Hard' || recordFilterLabel.includes('DAY 31~60')
+                    ? 'DAY 31~60'
+                    : '전체 DAY';
+        const score = record.total > 0 ? Math.round((record.correct / record.total) * 100) : 0;
+        return `<div class="score-row">
+            <span class="score-meta"><span class="score-mode ${record.mode === 'choice' ? 'choice' : 'write'}">${modeLabel}</span><span class="score-detail"><span class="score-day">${escapeHTML(dayLabel)}</span><span class="score-date">${escapeHTML(updatedAt)}</span></span></span>
+            <span class="score-result"><span class="score-label">최고점수</span><span class="score-record-name">${escapeHTML(playerName)}</span><span class="score-value">${score}점</span></span>
+            <span class="score-actions">
+                <button class="retry-score-btn" data-score-key="${escapeHTML(record.key)}">재도전</button>
+                <button class="delete-score-btn" data-score-key="${escapeHTML(record.key)}">삭제</button>
+            </span>
+        </div>`;
+    }).join('');
+    container.querySelectorAll('.retry-score-btn').forEach(button => {
+        const record = records.find(item => item.key === button.dataset.scoreKey);
+        button.addEventListener('click', () => retryScoreRecord(record));
+    });
+    container.querySelectorAll('.delete-score-btn').forEach(button => {
+        button.addEventListener('click', () => deleteScoreRecord(button.dataset.scoreKey));
+    });
 }
 
 // 6. 🎯 객관식 테스트 엔진 (4지 선다 자동 오답 보기 풀 결합)
+function getQuizWords() {
+    const selectedDay = document.getElementById('day-filter').value;
+    return selectedDay === 'ALL'
+        ? [...allWords]
+        : allWords.filter(item => item.day === selectedDay);
+}
+
 function initChoiceQuiz() {
-    if (filteredWords.length < 4) {
-        alert("객관식 테스트를 출제하기 위해 최저 4개 이상의 검색 단어가 화면에 활성화되어 있어야 합니다.");
+    const quizWords = getQuizWords();
+    if (quizWords.length < 4) {
+        alert("객관식 테스트를 출제하려면 선택한 DAY에 4개 이상의 단어가 필요합니다.");
         switchTab('tab-list');
         return;
     }
-    choiceQuizData = [...filteredWords].sort(() => 0.5 - Math.random()).slice(0, Math.min(10, filteredWords.length));
+    choiceQuizData = quizWords.sort(() => 0.5 - Math.random()).slice(0, Math.min(10, quizWords.length));
     choiceCurrentIdx = 0;
+    choiceCorrectCount = 0;
     showChoiceQuestion();
 }
 
@@ -173,7 +407,7 @@ function showChoiceQuestion() {
 
     // 사지선다 배열 생성 (정답 1개 기본 포함)
     let options = [currentItem.meaning];
-    const wrongPool = allWords.filter(w => w.meaning !== currentItem.meaning);
+    const wrongPool = getQuizWords().filter(w => w.meaning !== currentItem.meaning);
     const shuffledWrong = wrongPool.sort(() => 0.5 - Math.random());
     
     for (let i = 0; i < 3; i++) {
@@ -198,6 +432,7 @@ function checkChoiceAnswer(selected, correct, clickedBtn) {
     document.querySelectorAll('#choice-options .option-btn').forEach(btn => btn.disabled = true);
 
     if (selected === correct) {
+        choiceCorrectCount++;
         resultDiv.textContent = "⭕ 정답입니다!";
         resultDiv.className = "result-text success";
         clickedBtn.style.backgroundColor = "#d1fae5";
@@ -207,6 +442,10 @@ function checkChoiceAnswer(selected, correct, clickedBtn) {
         resultDiv.className = "result-text error";
         clickedBtn.style.backgroundColor = "#fee2e2";
         clickedBtn.style.borderColor = "var(--error)";
+    }
+
+    if (choiceCurrentIdx === choiceQuizData.length - 1) {
+        saveScoreRecord('choice', choiceCorrectCount, choiceQuizData.length);
     }
 }
 
@@ -222,13 +461,15 @@ function nextChoiceQuestion() {
 
 // 7. ✍️ 주관식 철자 타이핑 테스트 엔진
 function initWriteQuiz() {
-    if (filteredWords.length === 0) {
+    const quizWords = getQuizWords();
+    if (quizWords.length === 0) {
         alert("주관식 퀴즈를 출제할 데이터가 없습니다.");
         switchTab('tab-list');
         return;
     }
-    writeQuizData = [...filteredWords].sort(() => 0.5 - Math.random()).slice(0, Math.min(10, filteredWords.length));
+    writeQuizData = quizWords.sort(() => 0.5 - Math.random()).slice(0, Math.min(10, quizWords.length));
     writeCurrentIdx = 0;
+    writeCorrectCount = 0;
     showWriteQuestion();
 }
 
@@ -240,7 +481,22 @@ function showWriteQuestion() {
     const currentItem = writeQuizData[writeCurrentIdx];
     document.getElementById('write-progress').textContent = `${writeCurrentIdx + 1} / ${writeQuizData.length}`;
     document.getElementById('write-question').textContent = currentItem.meaning;
+    document.getElementById('write-hint').textContent = `힌트: ${createWriteHint(currentItem.word)}`;
     document.getElementById('write-input').focus();
+}
+
+function createWriteHint(word) {
+    const characters = [...word];
+    const letterIndexes = characters
+        .map((character, index) => /[a-zA-Z]/.test(character) ? index : -1)
+        .filter(index => index >= 0);
+    const shuffledIndexes = [...letterIndexes].sort(() => Math.random() - 0.5);
+    const revealedIndexes = new Set(shuffledIndexes.slice(0, Math.min(2, letterIndexes.length)));
+
+    return characters.map((character, index) => {
+        if (!/[a-zA-Z]/.test(character)) return character;
+        return revealedIndexes.has(index) ? character : '_';
+    }).join('');
 }
 
 function checkWriteAnswer() {
@@ -254,11 +510,16 @@ function checkWriteAnswer() {
     document.getElementById('write-input').disabled = true;
 
     if (userInput === targetAnswer) {
+        writeCorrectCount++;
         resultDiv.textContent = "⭕ 정답입니다!";
         resultDiv.className = "result-text success";
     } else {
         resultDiv.textContent = `❌ 오답입니다! 정답 스펠링: ${currentItem.word}`;
         resultDiv.className = "result-text error";
+    }
+
+    if (writeCurrentIdx === writeQuizData.length - 1) {
+        saveScoreRecord('write', writeCorrectCount, writeQuizData.length);
     }
 }
 

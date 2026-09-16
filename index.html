@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚡ 스마트 1800 영단어장 & 퀴즈 보드</title>
+    <title>OXFORD 1800 words</title>
     <style>
         :root {
             --primary: #0f766e;
@@ -25,7 +25,7 @@
         button { -webkit-tap-highlight-color: transparent; }
         .container { max-width: 1080px; width: 100%; margin: 0 auto; }
         
-        header { margin: 0 auto 28px; max-width: 680px; }
+        header { margin: 0 auto 28px; max-width: 680px; text-align: center; }
         header h1 { color: var(--text); font-size: clamp(1.75rem, 4vw, 2.6rem); letter-spacing: -0.04em; line-height: 1.15; margin-bottom: 10px; }
         header h1::first-letter { color: var(--primary); }
         header p { color: var(--text-light); font-size: 0.95rem; line-height: 1.6; }
@@ -46,21 +46,34 @@
         .view-panel.active { display: block; }
 
         /* 단어장 스타일 */
-        .word-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-        .word-card { background: var(--card-bg); padding: 18px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(22, 67, 62, 0.04); position: relative; transition: transform 0.2s, box-shadow 0.2s; }
-        .word-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
-        .word-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
-        .word-title { font-size: 1.28rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); overflow-wrap: anywhere; }
+        .word-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; }
+        .word-card { min-height: 100px; perspective: 1000px; }
+        .word-card-inner { position: relative; width: 100%; min-height: 100px; transform-style: preserve-3d; transition: transform 0.5s ease; }
+        .word-card.completed .word-card-inner { transform: rotateY(180deg); }
+        .word-card-face { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--card-bg); padding: 12px; border-radius: 12px; border: 1px solid var(--border); box-shadow: 0 4px 12px rgba(22, 67, 62, 0.04); backface-visibility: hidden; }
+        .word-card-face.back { transform: rotateY(180deg); justify-content: center; align-items: center; text-align: center; background: #ecfdf5; border-color: #a7f3d0; }
+        .word-card:hover .word-card-face { box-shadow: var(--shadow); }
+        .word-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; margin-bottom: 4px; }
+        .word-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+        .word-title-group { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .word-title { font-size: 1.15rem; font-weight: 800; letter-spacing: -0.02em; color: var(--text); white-space: nowrap; }
         .badge { flex: 0 0 auto; font-size: 0.7rem; padding: 4px 8px; border-radius: 20px; font-weight: 700; background: #edf3f1; color: var(--text-light); }
         .badge.hard { background: #fee2e2; color: var(--error); }
-        .word-meaning { min-height: 24px; color: var(--text-light); font-size: 0.95rem; line-height: 1.5; margin-bottom: 14px; overflow-wrap: anywhere; }
-        .audio-btn { background: var(--primary-soft); border: none; color: var(--primary-hover); padding: 8px 11px; border-radius: 8px; cursor: pointer; font-size: 0.82rem; font-weight: 700; transition: background 0.2s; }
-        .audio-btn:hover { background: #99f6e4; }
+        .word-meaning { min-height: 0; color: var(--text-light); font-size: 0.85rem; line-height: 1.2; margin-bottom: 0; overflow-wrap: anywhere; }
+        .audio-icon-btn { flex: 0 0 auto; width: 21px; height: 21px; padding: 0; border: none; background: transparent; color: var(--primary); cursor: pointer; font-size: 0.82rem; line-height: 1; opacity: 0.8; transition: transform 0.2s, opacity 0.2s; }
+        .audio-icon-btn:hover { opacity: 1; transform: scale(1.15); }
+        .complete-btn { flex: 0 0 auto; width: 21px; height: 21px; padding: 2px; border: none; border-radius: 50%; background: transparent; color: var(--primary); cursor: pointer; line-height: 1; transition: background 0.2s, transform 0.2s; }
+        .complete-btn:hover { background: var(--primary-soft); transform: scale(1.12); }
+        .complete-btn svg { display: block; width: 100%; height: 100%; }
+        .completed-icon { width: 58px; height: 58px; margin: 0; color: var(--success); cursor: pointer; transition: transform 0.2s, opacity 0.2s; }
+        .completed-icon:hover { opacity: 0.8; transform: scale(1.08); }
+        .completed-icon svg { display: block; width: 100%; height: 100%; }
 
         /* 퀴즈 스타일 */
         .quiz-card { background: var(--card-bg); padding: clamp(24px, 6vw, 52px); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); text-align: center; }
         .quiz-progress { display: inline-block; padding: 5px 10px; background: #edf3f1; border-radius: 20px; font-size: 0.8rem; font-weight: 700; color: var(--text-light); margin-bottom: 22px; }
         .quiz-question { font-size: clamp(1.6rem, 5vw, 2.35rem); font-weight: 800; letter-spacing: -0.04em; line-height: 1.25; margin-bottom: 28px; color: var(--text); overflow-wrap: anywhere; }
+        .write-hint { margin: -12px auto 20px; color: var(--primary); font-size: 0.95rem; font-weight: 700; letter-spacing: 0.08em; }
         .quiz-options { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 0 auto 20px; max-width: 680px; }
         .option-btn { min-height: 58px; padding: 13px 15px; border: 1px solid var(--border); background: var(--card-bg); border-radius: 10px; color: var(--text); font-size: 1rem; cursor: pointer; transition: background 0.2s, border 0.2s, transform 0.2s; font-weight: 600; overflow-wrap: anywhere; }
         .option-btn:hover { background: #f0fdfa; border-color: var(--primary); transform: translateY(-1px); }
@@ -80,6 +93,33 @@
         .result-text.success { color: var(--success); }
         .result-text.error { color: var(--error); }
 
+        /* 점수 기록 */
+        .score-panel { background: var(--card-bg); padding: clamp(20px, 4vw, 32px); border-radius: 16px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+        .score-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+        .score-header h2 { font-size: 1.35rem; }
+        .score-header p { color: var(--text-light); font-size: 0.88rem; margin-top: 5px; }
+        .score-list { display: grid; gap: 10px; }
+        .score-row { display: grid; grid-template-columns: minmax(330px, 1.5fr) minmax(220px, 1fr) auto; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; background: #fbfdfc; }
+        .score-meta { display: flex; align-items: center; gap: 14px; min-width: 0; }
+        .score-mode { font-size: 1.15rem; font-weight: 900; letter-spacing: 0.02em; white-space: nowrap; }
+        .score-mode.choice { color: #1d4ed8; }
+        .score-mode.write { color: #c2410c; }
+        .score-detail { display: flex; align-items: center; gap: 10px; color: var(--text-light); line-height: 1.45; min-width: 0; }
+        .score-day { color: var(--text); font-size: 1.15rem; font-weight: 900; white-space: nowrap; }
+        .score-result { display: flex; align-items: baseline; justify-content: flex-end; gap: 5px; min-width: 0; color: var(--primary); font-size: 1.05rem; font-weight: 800; overflow-wrap: anywhere; }
+        .score-label { color: #b45309; font-size: 0.78rem; font-weight: 900; letter-spacing: 0.04em; white-space: nowrap; text-shadow: 0 1px 0 #fde68a; }
+        .score-label::before { content: '★'; color: #f59e0b; margin-right: 3px; text-shadow: none; }
+        .score-record-name { color: #000000; font-size: 1.08rem; overflow-wrap: anywhere; }
+        .score-date { font-size: 0.82rem; white-space: nowrap; }
+        .score-value { margin-left: 2rem; color: #b91c1c; font-size: 1.35rem; font-weight: 900; white-space: nowrap; }
+        .score-actions { display: flex; gap: 7px; }
+        .retry-score-btn, .delete-score-btn { padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.8rem; font-weight: 700; }
+        .retry-score-btn { border: 1px solid var(--primary); background: var(--primary-soft); color: var(--primary-hover); }
+        .retry-score-btn:hover { background: #99f6e4; }
+        .delete-score-btn { padding: 8px 10px; border: 1px solid #fecaca; border-radius: 8px; background: #fff1f2; color: var(--error); cursor: pointer; font-size: 0.8rem; font-weight: 700; }
+        .delete-score-btn:hover { background: #ffe4e6; }
+        .empty-score { color: var(--text-light); padding: 28px 0; text-align: center; }
+
         @media (max-width: 640px) {
             body { padding: 22px 12px 32px; }
             header { margin-bottom: 22px; }
@@ -94,6 +134,14 @@
             .quiz-options { grid-template-columns: 1fr; gap: 9px; }
             .quiz-nav { flex-direction: column-reverse; }
             .nav-btn { width: 100%; }
+            .score-header { align-items: flex-start; flex-direction: column; }
+            .score-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 7px 12px; }
+            .score-meta { grid-column: 1 / -1; grid-row: 1; gap: 10px; }
+            .score-detail { flex-wrap: wrap; }
+            .score-result { grid-column: 1 / -1; grid-row: 2; justify-content: space-between; width: 100%; min-width: 0; }
+            .score-result .score-value { margin-left: auto; }
+            .score-actions { grid-column: 1 / -1; grid-row: 3; display: grid; grid-template-columns: 1fr 1fr; }
+            .retry-score-btn, .delete-score-btn { width: 100%; }
         }
     </style>
 </head>
@@ -101,32 +149,33 @@
 
 <div class="container">
     <header>
-        <h1>⚡ 스마트 영단어장 & 퀴즈 보드</h1>
-        <p>CSV 비동기 로드 기반 초경량 영단어 마스터 웹 앱</p>
+        <h1>📚 OXFORD 1800 words</h1>
+        <p>- Oxford 사전 기반 단어 학습 앱 -</p>
     </header>
 
     <div class="tabs">
         <button class="tab-btn active" onclick="switchTab('tab-list')">📋 단어장 보기</button>
         <button class="tab-btn" onclick="switchTab('tab-choice')">🎯 객관식 테스트</button>
         <button class="tab-btn" onclick="switchTab('tab-write')">✍️ 주관식 테스트</button>
+        <button class="tab-btn" onclick="switchTab('tab-scores')">📊 점수 기록</button>
     </div>
 
     <!-- 필터링 제어 영역 -->
     <div class="filter-section">
-        <select id="day-filter" onchange="handleFilterChange()">
-            <option value="ALL">전체 DAY 선택</option>
-        </select>
         <select id="level-filter" onchange="handleFilterChange()">
             <option value="ALL">전체 난이도</option>
-            <option value="Normal">Normal</option>
+            <option value="Normal" selected>Normal</option>
             <option value="Hard">Hard</option>
+        </select>
+        <select id="day-filter" onchange="handleFilterChange()">
+            <option value="ALL">전체 DAY 선택</option>
         </select>
         <input type="text" id="search-bar" class="search-input" placeholder="단어 또는 뜻 검색..." oninput="handleFilterChange()">
     </div>
 
     <!-- 1. 단어장 보기 패널 -->
     <div id="tab-list" class="view-panel active">
-        <div class="word-list" id="word-list-container">
+            <div class="word-list" id="word-list-container">
             <!-- 자바스크립트로 데이터 주입 -->
         </div>
     </div>
@@ -150,6 +199,7 @@
         <div class="quiz-card">
             <div class="quiz-progress" id="write-progress">0 / 0</div>
             <div class="quiz-question" id="write-question">뜻이 화면에 노출됨</div>
+            <div class="write-hint" id="write-hint" aria-live="polite">힌트: -</div>
             <div class="subjective-container">
                 <input type="text" id="write-input" class="subjective-input" placeholder="영단어를 입력하세요" autocomplete="off" onkeyup="if(window.event.keyCode==13){checkWriteAnswer()}">
                 <button class="submit-btn" onclick="checkWriteAnswer()">정답 확인</button>
@@ -159,6 +209,19 @@
                 <button class="nav-btn" onclick="initWriteQuiz()">🔄 퀴즈 다시 생성</button>
                 <button class="nav-btn" id="write-next-btn" onclick="nextWriteQuestion()" style="background-color: var(--primary);">다음 문제 ➡️</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 4. 점수 기록 패널 -->
+    <div id="tab-scores" class="view-panel">
+        <div class="score-panel">
+            <div class="score-header">
+                <div>
+                    <h2>점수 기록</h2>
+                    <p>같은 모드와 필터로 다시 완료하면 해당 기록이 업데이트됩니다.</p>
+                </div>
+            </div>
+            <div class="score-list" id="score-list-container"></div>
         </div>
     </div>
 </div>
