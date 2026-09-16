@@ -1,5 +1,5 @@
 let allWords = [];       // 전체 파싱된 CSV 데이터 저장 배열
-let filteredWords = [];  // 필터 및 검색이 적용된 실시간 데이터 배열
+let filteredWords = [];  // 필터가 적용된 실시간 데이터 배열
 
 // 퀴즈 상태 제어 변수
 let choiceQuizData = [];
@@ -95,7 +95,7 @@ function populateDayFilter(level = 'ALL') {
     allOption.value = 'ALL';
     allOption.textContent = range
         ? `DAY ${String(range[0]).padStart(2, '0')}~${String(range[1]).padStart(2, '0')}`
-        : '전체 DAY 선택';
+        : 'DAY_ALL';
     dayFilter.appendChild(allOption);
     
     days.forEach(day => {
@@ -109,12 +109,11 @@ function populateDayFilter(level = 'ALL') {
     dayFilter.value = days.includes(previousDay) ? previousDay : 'ALL';
 }
 
-// 3. 조건부 검색 필터 핸들러
+// 3. 난이도 및 DAY 필터 핸들러
 function handleFilterChange() {
     const levelVal = document.getElementById('level-filter').value;
     populateDayFilter(levelVal);
     const dayVal = document.getElementById('day-filter').value;
-    const searchVal = document.getElementById('search-bar').value.toLowerCase().trim();
 
     filteredWords = allWords.filter(item => {
         const matchDay = (dayVal === 'ALL' || item.day === dayVal);
@@ -125,10 +124,7 @@ function handleFilterChange() {
             : levelVal === 'Hard'
                 ? dayNumber >= 31 && dayNumber <= 60
                 : true;
-        const matchSearch = (!searchVal || 
-                             item.word.toLowerCase().includes(searchVal) || 
-                             item.meaning.toLowerCase().includes(searchVal));
-        return matchDay && matchLevel && matchLevelDayRange && matchSearch;
+        return matchDay && matchLevel && matchLevelDayRange;
     });
 
     renderWordList();
@@ -282,7 +278,6 @@ function escapeHTML(value) {
 function getScoreFilterLabel() {
     const day = document.getElementById('day-filter').value;
     const level = document.getElementById('level-filter').value;
-    const search = document.getElementById('search-bar').value.trim();
     const dayLabel = day !== 'ALL'
         ? day.replace('_', ' ')
         : level === 'Normal'
@@ -290,12 +285,12 @@ function getScoreFilterLabel() {
             : level === 'Hard'
                 ? 'DAY 31~60'
                 : '전체 DAY';
-    return [dayLabel, level !== 'ALL' ? level : '전체 난이도', search ? `검색: ${search}` : '전체 단어'].join(' · ');
+    return [dayLabel, level !== 'ALL' ? level : '전체 난이도'].join(' · ');
 }
 
 function saveScoreRecord(mode, correct, total) {
     const records = getScoreRecords();
-    const key = `${mode}|${document.getElementById('day-filter').value}|${document.getElementById('level-filter').value}|${document.getElementById('search-bar').value.trim().toLowerCase()}`;
+    const key = `${mode}|${document.getElementById('day-filter').value}|${document.getElementById('level-filter').value}`;
     const existingIndex = records.findIndex(item => item.key === key);
     const existingRecord = existingIndex >= 0 ? records[existingIndex] : null;
     const currentScore = total > 0 ? correct / total : 0;
@@ -333,16 +328,13 @@ function deleteScoreRecord(key) {
 }
 
 function retryScoreRecord(record) {
-    const [, day, level, ...searchParts] = record.key.split('|');
-    const search = searchParts.join('|');
+    const [, day, level] = record.key.split('|');
     const levelFilter = document.getElementById('level-filter');
     const dayFilter = document.getElementById('day-filter');
-    const searchBar = document.getElementById('search-bar');
 
     levelFilter.value = level || 'ALL';
     populateDayFilter(levelFilter.value);
     dayFilter.value = dayFilter.querySelector(`option[value="${day}"]`) ? day : 'ALL';
-    searchBar.value = search;
     handleFilterChange();
 
     const tabId = record.mode === 'choice' ? 'tab-choice' : 'tab-write';
