@@ -156,7 +156,7 @@ function renderWordList() {
                     <div class="word-header">
                         <div class="word-title-group">
                             <span class="word-title">${item.word}</span>
-                            ${item.audio ? `<button class="audio-icon-btn" onclick="playAudio('${item.audio}')" aria-label="${item.word} 발음 듣기" title="발음 듣기">🔊</button>` : ''}
+                            ${item.audio ? `<button class="audio-icon-btn" data-audio="${escapeHTML(item.audio)}" data-word="${escapeHTML(item.word)}" onclick="playAudio(this.dataset.audio, this.dataset.word)" aria-label="${escapeHTML(item.word)} 발음 듣기" title="발음 듣기">🔊</button>` : ''}
                         </div>
                         <div class="word-header-actions">
                             <button class="complete-btn" data-word-key="${escapeHTML(wordKey)}" aria-label="학습 완료" title="학습 완료">
@@ -217,11 +217,25 @@ function toggleWordCompleted(wordKey) {
     renderWordList();
 }
 
-// 원본 구글 TTS 발음 연동 함수
-function playAudio(url) {
-    if (!url) return;
+// 외부 TTS를 우선 사용하고, 차단되면 브라우저 음성으로 재생합니다.
+function playAudio(url, word) {
+    const speakWord = () => {
+        if (!word || !('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+    };
+
+    if (!url) {
+        speakWord();
+        return;
+    }
+
     const audio = new Audio(url);
-    audio.play().catch(e => console.log("음원 파일 재생 지연:", e));
+    audio.addEventListener('error', speakWord, { once: true });
+    audio.play().catch(speakWord);
 }
 
 // 5. 상단 반응형 메뉴 전환 제어
